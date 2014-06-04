@@ -47,8 +47,20 @@ module Heroics
       path = "#{@path_prefix}#{path}" unless @path_prefix == '/'
       headers = @default_headers
       if body
-        headers = headers.merge({'Content-Type' => 'application/json'})
-        body = MultiJson.dump(body)
+        case @link_schema.method
+        when :put, :post, :patch
+          # pass in parameters as json for PUT/POST/PATCH
+          headers = headers.merge({'Content-Type' => 'application/json'})
+          body = MultiJson.dump(body)
+        when :get, :delete
+          # pass in parameters as URI query for GET/DELETE
+          if body.is_a?(Hash)
+            query = body
+          else
+            query = MultiJson.load(body)
+          end
+          body = nil
+        end        
       end
       cache_key = "#{path}:#{headers.hash}"
       if @link_schema.method == :get
@@ -58,6 +70,7 @@ module Heroics
 
       connection = Excon.new(@root_url)
       response = connection.request(method: @link_schema.method, path: path,
+                                    query: query,
                                     headers: headers, body: body,
                                     expects: [200, 201, 202, 206, 304])
       content_type = response.headers['Content-Type']
